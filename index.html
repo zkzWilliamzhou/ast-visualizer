@@ -1,0 +1,1560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AST Visualizer - Interactive JavaScript/TypeScript AST Explorer</title>
+  <meta name="description" content="Interactive, browser-based AST visualization and exploration tool for JavaScript/TypeScript. Parse, visualize, and share ASTs with zero dependencies.">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌳</text></svg>">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --bg-primary: #ffffff;
+      --bg-secondary: #f8f9fa;
+      --bg-tertiary: #e9ecef;
+      --text-primary: #212529;
+      --text-secondary: #495057;
+      --text-muted: #6c757d;
+      --border-color: #dee2e6;
+      --accent: #2563eb;
+      --accent-hover: #1d4ed8;
+      --accent-light: #dbeafe;
+      --success: #16a34a;
+      --warning: #ca8a04;
+      --error: #dc2626;
+      --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+      --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1);
+      --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1);
+      --radius-sm: 4px;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+      --transition: 150ms ease;
+      --font-mono: 'SF Mono', 'Fira Code', 'Monaco', 'Consolas', monospace;
+      --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg-primary: #1e1e2e;
+        --bg-secondary: #252536;
+        --bg-tertiary: #313244;
+        --text-primary: #cdd6f4;
+        --text-secondary: #bac2de;
+        --text-muted: #a6adc8;
+        --border-color: #45475a;
+        --accent: #89b4fa;
+        --accent-hover: #74c7ec;
+        --accent-light: #1e66f5;
+        --success: #a6e3a1;
+        --warning: #f9e2af;
+        --error: #f38ba8;
+      }
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.6;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Header */
+    header {
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border-color);
+      padding: 1rem 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      flex-wrap: wrap;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      text-decoration: none;
+    }
+
+    .logo-icon {
+      font-size: 1.5rem;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      padding: 0.625rem 1.25rem;
+      font-size: 0.875rem;
+      font-weight: 500;
+      border-radius: var(--radius-md);
+      border: none;
+      cursor: pointer;
+      transition: all var(--transition);
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: var(--accent-hover);
+      transform: translateY(-1px);
+      box-shadow: var(--shadow-md);
+    }
+
+    .btn-secondary {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+      border: 1px solid var(--border-color);
+    }
+
+    .btn-secondary:hover {
+      background: var(--border-color);
+    }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--text-secondary);
+    }
+
+    .btn-ghost:hover {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+    }
+
+    .btn-sm {
+      padding: 0.375rem 0.875rem;
+      font-size: 0.8125rem;
+    }
+
+    /* Main Layout */
+    main {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 380px 1fr;
+      grid-template-rows: 1fr;
+      min-height: calc(100vh - 72px);
+      overflow: hidden;
+    }
+
+    /* Sidebar / Editor Panel */
+    .editor-panel {
+      background: var(--bg-secondary);
+      border-right: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      min-width: 320px;
+      max-width: 500px;
+    }
+
+    .panel-header {
+      padding: 1rem;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+    }
+
+    .panel-title {
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .panel-actions {
+      display: flex;
+      gap: 0.375rem;
+    }
+
+    .icon-btn {
+      width: 32px;
+      height: 32px;
+      border-radius: var(--radius-sm);
+      border: none;
+      background: transparent;
+      color: var(--text-secondary);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all var(--transition);
+    }
+
+    .icon-btn:hover {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+    }
+
+    .icon-btn:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    /* Editor */
+    .editor-container {
+      flex: 1;
+      overflow: hidden;
+      position: relative;
+    }
+
+    #editor {
+      width: 100%;
+      height: 100%;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      line-height: 1.5;
+      border: none;
+      outline: none;
+      resize: none;
+      background: transparent;
+      color: var(--text-primary);
+      padding: 1rem;
+    }
+
+    #editor::placeholder {
+      color: var(--text-muted);
+    }
+
+    /* Language selector */
+    .language-selector {
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .language-selector label {
+      font-size: 0.8125rem;
+      font-weight: 500;
+      color: var(--text-secondary);
+      white-space: nowrap;
+    }
+
+    .language-selector select {
+      flex: 1;
+      padding: 0.375rem 0.75rem;
+      font-size: 0.8125rem;
+      font-family: inherit;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+    }
+
+    .language-selector select:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    /* Visualization Panel */
+    .visualization-panel {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background: var(--bg-primary);
+    }
+
+    .viz-toolbar {
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .viz-mode-tabs {
+      display: flex;
+      background: var(--bg-tertiary);
+      border-radius: var(--radius-md);
+      padding: 2px;
+      gap: 2px;
+    }
+
+    .viz-mode-tab {
+      padding: 0.375rem 0.875rem;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      border: none;
+      background: transparent;
+      color: var(--text-secondary);
+      cursor: pointer;
+      border-radius: var(--radius-sm);
+      transition: all var(--transition);
+    }
+
+    .viz-mode-tab.active {
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .viz-mode-tab:hover:not(.active) {
+      color: var(--text-primary);
+    }
+
+    .viz-filters {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      justify-content: flex-end;
+    }
+
+    .search-box {
+      position: relative;
+    }
+
+    .search-box input {
+      padding: 0.375rem 0.75rem 0.375rem 2.25rem;
+      font-size: 0.8125rem;
+      font-family: inherit;
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      width: 200px;
+      transition: all var(--transition);
+    }
+
+    .search-box input:focus {
+      outline: none;
+      border-color: var(--accent);
+      width: 250px;
+    }
+
+    .search-box svg {
+      position: absolute;
+      left: 0.625rem;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-muted);
+      width: 16px;
+      height: 16px;
+    }
+
+    .filter-select {
+      padding: 0.375rem 0.75rem;
+      font-size: 0.8125rem;
+      font-family: inherit;
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+    }
+
+    /* Tree View */
+    .tree-container {
+      flex: 1;
+      overflow: auto;
+      padding: 1rem;
+    }
+
+    .tree-node {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      line-height: 1.5;
+      user-select: none;
+    }
+
+    .tree-node-header {
+      display: flex;
+      align-items: center;
+      gap: 0.375rem;
+      padding: 0.125rem 0.375rem;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: background var(--transition);
+      white-space: nowrap;
+    }
+
+    .tree-node-header:hover {
+      background: var(--bg-tertiary);
+    }
+
+    .tree-node-header.selected {
+      background: var(--accent-light);
+      color: var(--accent);
+    }
+
+    .tree-node-header.matched {
+      background: #fef9c3;
+      color: var(--warning);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .tree-node-header.matched {
+        background: #422006;
+        color: #f9e2af;
+      }
+    }
+
+    .tree-node-expander {
+      width: 16px;
+      height: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      color: var(--text-muted);
+      transition: transform var(--transition);
+    }
+
+    .tree-node-expander.collapsed {
+      transform: rotate(-90deg);
+    }
+
+    .tree-node-icon {
+      width: 16px;
+      height: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .tree-node-label {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .tree-node-type {
+      font-size: 10px;
+      color: var(--text-muted);
+      padding: 0 0.25rem;
+      background: var(--bg-tertiary);
+      border-radius: 2px;
+      flex-shrink: 0;
+    }
+
+    .tree-node-source {
+      font-size: 11px;
+      color: var(--text-muted);
+      padding: 0.125rem 0 0.125rem 1.5rem;
+      border-left: 1px solid var(--border-color);
+      margin-left: 8px;
+      white-space: pre-wrap;
+      word-break: break-all;
+      max-height: 60px;
+      overflow: auto;
+    }
+
+    .tree-node-children {
+      margin-left: 1rem;
+      border-left: 1px solid var(--border-color);
+      padding-left: 0.5rem;
+    }
+
+    .tree-node-children.collapsed {
+      display: none;
+    }
+
+    /* Graph View Placeholder */
+    .graph-container {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-muted);
+    }
+
+    /* Status Bar */
+    .status-bar {
+      padding: 0.5rem 1rem;
+      border-top: 1px solid var(--border-color);
+      background: var(--bg-secondary);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .status-item {
+      display: flex;
+      align-items: center;
+      gap: 0.375rem;
+    }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      opacity: 0;
+      visibility: hidden;
+      transition: all var(--transition);
+    }
+
+    .modal-overlay.open {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .modal {
+      background: var(--bg-primary);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-lg);
+      padding: 1.5rem;
+      width: 90%;
+      max-width: 500px;
+      max-height: 80vh;
+      overflow: auto;
+      transform: scale(0.95);
+      transition: transform var(--transition);
+    }
+
+    .modal-overlay.open .modal {
+      transform: scale(1);
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1rem;
+    }
+
+    .modal-title {
+      font-size: 1.125rem;
+      font-weight: 600;
+    }
+
+    .modal-close {
+      width: 32px;
+      height: 32px;
+      border-radius: var(--radius-sm);
+      border: none;
+      background: transparent;
+      color: var(--text-secondary);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all var(--transition);
+    }
+
+    .modal-close:hover {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+    }
+
+    .modal-body {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.375rem;
+    }
+
+    .form-group label {
+      font-size: 0.8125rem;
+      font-weight: 500;
+      color: var(--text-secondary);
+    }
+
+    .form-group input,
+    .form-group textarea,
+    .form-group select {
+      padding: 0.5rem 0.75rem;
+      font-size: 0.875rem;
+      font-family: inherit;
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+    }
+
+    .form-group input:focus,
+    .form-group textarea:focus,
+    .form-group select:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    .form-group textarea {
+      font-family: var(--font-mono);
+      min-height: 100px;
+      resize: vertical;
+    }
+
+    .modal-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.5rem;
+      margin-top: 1rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border-color);
+    }
+
+    /* Toast */
+    .toast-container {
+      position: fixed;
+      bottom: 1.5rem;
+      right: 1.5rem;
+      z-index: 2000;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .toast {
+      background: var(--bg-primary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 0.75rem 1rem;
+      box-shadow: var(--shadow-lg);
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      animation: slideIn 0.3s ease;
+      min-width: 250px;
+      max-width: 400px;
+    }
+
+    .toast.success {
+      border-left: 3px solid var(--success);
+    }
+
+    .toast.error {
+      border-left: 3px solid var(--error);
+    }
+
+    .toast.warning {
+      border-left: 3px solid var(--warning);
+    }
+
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateX(100%); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+
+    /* Responsive */
+    @media (max-width: 1024px) {
+      main {
+        grid-template-columns: 1fr;
+        grid-template-rows: 400px 1fr;
+      }
+
+      .editor-panel {
+        border-right: none;
+        border-bottom: 1px solid var(--border-color);
+        max-width: none;
+        min-height: 300px;
+      }
+    }
+
+    @media (max-width: 640px) {
+      header {
+        padding: 0.75rem 1rem;
+      }
+
+      .logo span {
+        display: none;
+      }
+
+      .viz-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .viz-filters {
+        justify-content: stretch;
+      }
+
+      .search-box input {
+        width: 100%;
+      }
+
+      .search-box input:focus {
+        width: 100%;
+      }
+
+      .status-bar {
+        flex-wrap: wrap;
+      }
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--border-color);
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <a href="#" class="logo">
+      <span class="logo-icon">🌳</span>
+      <span>AST Visualizer</span>
+    </a>
+    <div class="header-actions">
+      <button class="btn btn-secondary btn-sm" id="btn-load-example">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+          <polyline points="17 8 12 3 7 8"></polyline>
+          <line x1="12" y1="3" x2="12" y2="15"></line>
+        </svg>
+        Load Example
+      </button>
+      <button class="btn btn-ghost btn-sm" id="btn-share">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="18" cy="5" r="3"></circle>
+          <circle cx="6" cy="12" r="3"></circle>
+          <circle cx="18" cy="19" r="3"></circle>
+          <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+          <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+        </svg>
+        Share
+      </button>
+      <button class="btn btn-ghost btn-sm" id="btn-export">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+          <polyline points="7 10 12 15 17 10"></polyline>
+          <line x1="12" y1="15" x2="12" y2="3"></line>
+        </svg>
+        Export
+      </button>
+      <button class="btn btn-primary btn-sm" id="btn-ai-prompt">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2z"></path>
+          <path d="M12 16v-4"></path>
+          <path d="M12 8h.01"></path>
+        </svg>
+        Copy AI Prompt
+      </button>
+    </div>
+  </header>
+
+  <main>
+    <!-- Editor Panel -->
+    <aside class="editor-panel" role="complementary" aria-label="Code Editor">
+      <div class="panel-header">
+        <span class="panel-title">Source Code</span>
+        <div class="panel-actions">
+          <button class="icon-btn" id="btn-format" title="Format Code" aria-label="Format Code">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="3" y1="6" x2="21" y2="6"></line>
+              <line x1="3" y1="12" x2="21" y2="12"></line>
+              <line x1="3" y1="18" x2="21" y2="18"></line>
+            </svg>
+          </button>
+          <button class="icon-btn" id="btn-clear" title="Clear Editor" aria-label="Clear Editor">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="language-selector">
+        <label for="language-select">Language</label>
+        <select id="language-select">
+          <option value="ts">TypeScript</option>
+          <option value="tsx">TSX</option>
+          <option value="js" selected>JavaScript</option>
+          <option value="jsx">JSX</option>
+        </select>
+      </div>
+
+      <div class="editor-container">
+        <textarea id="editor" placeholder="Paste or write JavaScript/TypeScript code here...&#10;&#10;Example:&#10;function fibonacci(n) {&#10;  if (n <= 1) return n;&#10;  return fibonacci(n - 1) + fibonacci(n - 2);&#10;}&#10;&#10;const result = fibonacci(10);" spellcheck="false"></textarea>
+      </div>
+    </aside>
+
+    <!-- Visualization Panel -->
+    <section class="visualization-panel" aria-label="AST Visualization">
+      <div class="viz-toolbar">
+        <div class="viz-mode-tabs" role="tablist" aria-label="Visualization Mode">
+          <button class="viz-mode-tab active" role="tab" data-mode="tree" aria-selected="true">Tree View</button>
+          <button class="viz-mode-tab" role="tab" data-mode="graph" aria-selected="false">Graph View</button>
+          <button class="viz-mode-tab" role="tab" data-mode="split" aria-selected="false">Split View</button>
+        </div>
+        <div class="viz-filters">
+          <div class="search-box">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input type="search" id="search-input" placeholder="Filter nodes..." aria-label="Filter nodes">
+          </div>
+          <select class="filter-select" id="type-filter" aria-label="Filter by node type">
+            <option value="">All Types</option>
+            <option value="statement">Statements</option>
+            <option value="declaration">Declarations</option>
+            <option value="expression">Expressions</option>
+            <option value="identifier">Identifiers</option>
+            <option value="literal">Literals</option>
+            <option value="module">Imports/Exports</option>
+            <option value="type">Types</option>
+            <option value="jsx">JSX</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="tree-container" id="tree-container" role="tree" aria-label="AST Tree">
+        <div class="tree-node" id="tree-root">
+          <div class="tree-placeholder">
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color: var(--text-muted); margin-bottom: 1rem;">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+              <polyline points="10 9 9 9 8 9"></polyline>
+            </svg>
+            <p style="font-size: 1rem; margin-bottom: 0.5rem;">No AST to display</p>
+            <p style="font-size: 0.875rem;">Enter code in the editor to visualize the AST</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="graph-container" id="graph-container" style="display: none;">
+        <p>Graph view coming soon...</p>
+      </div>
+
+      <div class="status-bar">
+        <div class="status-item">
+          <span id="status-nodes">0 nodes</span>
+        </div>
+        <div class="status-item">
+          <span id="status-depth">Depth: 0</span>
+        </div>
+        <div class="status-item">
+          <span id="status-language">Language: JavaScript</span>
+        </div>
+        <div class="status-item">
+          <span id="status-parse-time">Parse: 0ms</span>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Share Modal -->
+  <div class="modal-overlay" id="share-modal" role="dialog" aria-modal="true" aria-labelledby="share-modal-title">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 class="modal-title" id="share-modal-title">Share Visualization</h2>
+        <button class="modal-close" id="share-modal-close" aria-label="Close">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="share-url">Permalink (copy to share)</label>
+          <input type="text" id="share-url" readonly aria-describedby="share-url-help">
+          <small id="share-url-help">Anyone with this link can view the visualization</small>
+        </div>
+        <div class="form-group">
+          <label>QR Code</label>
+          <div id="share-qr" style="display: flex; justify-content: center;"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="share-copy">Copy Link</button>
+        <button class="btn btn-primary" id="share-close">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Export Modal -->
+  <div class="modal-overlay" id="export-modal" role="dialog" aria-modal="true" aria-labelledby="export-modal-title">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 class="modal-title" id="export-modal-title">Export Visualization</h2>
+        <button class="modal-close" id="export-modal-close" aria-label="Close">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Format</label>
+          <select id="export-format">
+            <option value="json">JSON</option>
+            <option value="dot">DOT (Graphviz)</option>
+            <option value="mermaid">Mermaid</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="export-output">Output</label>
+          <textarea id="export-output" readonly></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="export-copy">Copy</button>
+        <button class="btn btn-primary" id="export-download">Download</button>
+        <button class="btn btn-ghost" id="export-close">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- AI Prompt Modal -->
+  <div class="modal-overlay" id="ai-prompt-modal" role="dialog" aria-modal="true" aria-labelledby="ai-prompt-modal-title">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 class="modal-title" id="ai-prompt-modal-title">AI Prompt</h2>
+        <button class="modal-close" id="ai-prompt-modal-close" aria-label="Close">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="ai-prompt-output">Prompt (optimized for LLMs)</label>
+          <textarea id="ai-prompt-output" readonly></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" id="ai-prompt-copy">Copy to Clipboard</button>
+        <button class="btn btn-ghost" id="ai-prompt-close">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <script type="module">
+    // Import the ES module
+    import { parseAST, visualizeAST, generatePermalink, parsePermalink, copyAsAIPrompt } from './src/index.ts';
+    
+    // State
+    let currentAST = null;
+    let currentVisData = null;
+    let selectedNodeId = null;
+    let debounceTimer = null;
+
+    // DOM Elements
+    const editor = document.getElementById('editor');
+    const languageSelect = document.getElementById('language-select');
+    const treeContainer = document.getElementById('tree-container');
+    const treeRoot = document.getElementById('tree-root');
+    const graphContainer = document.getElementById('graph-container');
+    const searchInput = document.getElementById('search-input');
+    const typeFilter = document.getElementById('type-filter');
+    const modeTabs = document.querySelectorAll('.viz-mode-tab');
+    const statusNodes = document.getElementById('status-nodes');
+    const statusDepth = document.getElementById('status-depth');
+    const statusLanguage = document.getElementById('status-language');
+    const statusParseTime = document.getElementById('status-parse-time');
+
+    // Modals
+    const shareModal = document.getElementById('share-modal');
+    const exportModal = document.getElementById('export-modal');
+    const aiPromptModal = document.getElementById('ai-prompt-modal');
+
+    // Initialize with example code
+    const exampleCode = `function fibonacci(n) {
+  if (n <= 1) return n;
+  return fibonacci(n - 1) + fibonacci(n - 2);
+}
+
+class Calculator {
+  constructor(initialValue = 0) {
+    this.value = initialValue;
+  }
+
+  add(n) {
+    this.value += n;
+    return this;
+  }
+
+  multiply(n) {
+    this.value *= n;
+    return this;
+  }
+
+  getResult() {
+    return this.value;
+  }
+}
+
+const calc = new Calculator(10);
+calc.add(5).multiply(2);
+const result = calc.getResult();
+
+import { someUtility } from './utils';
+export { fibonacci, Calculator };`;
+
+    editor.value = exampleCode;
+    languageSelect.value = 'js';
+
+    // Toast function
+    function showToast(message, type = 'success') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      toast.className = `toast ${type}`;
+      toast.textContent = message;
+      container.appendChild(toast);
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateX(100%)';
+        setTimeout(() => toast.remove(), 300);
+      }, 3000);
+    }
+
+    // Parse and visualize
+    function parseAndVisualize() {
+      const code = editor.value;
+      const language = languageSelect.value;
+      
+      if (!code.trim()) {
+        clearVisualization();
+        return;
+      }
+
+      const startTime = performance.now();
+      
+      try {
+        currentAST = parseAST(code, { language, sourceType: 'module' });
+        currentAST.language = language;
+        currentAST.sourceCode = code;
+        
+        currentVisData = visualizeAST(currentAST, {
+          includeSource: true,
+          maxSourceLength: 150,
+        });
+
+        renderTree(currentVisData);
+        updateStatus(currentVisData, performance.now() - startTime);
+      } catch (error) {
+        showToast(`Parse error: ${error.message}`, 'error');
+        clearVisualization();
+      }
+    }
+
+    // Debounced parse
+    function debouncedParse() {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(parseAndVisualize, 300);
+    }
+
+    // Clear visualization
+    function clearVisualization() {
+      currentAST = null;
+      currentVisData = null;
+      selectedNodeId = null;
+      treeRoot.innerHTML = `
+        <div class="tree-placeholder">
+          <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color: var(--text-muted); margin-bottom: 1rem;">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="16" y1="13" x2="8" y2="13"></line>
+            <line x1="16" y1="17" x2="8" y2="17"></line>
+            <polyline points="10 9 9 9 8 9"></polyline>
+          </svg>
+          <p style="font-size: 1rem; margin-bottom: 0.5rem;">No AST to display</p>
+          <p style="font-size: 0.875rem;">Enter code in the editor to visualize the AST</p>
+        </div>
+      `;
+      updateStatus({ nodeCount: 0, maxDepth: 0, language: languageSelect.value }, 0);
+    }
+
+    // Update status bar
+    function updateStatus(visData, parseTime) {
+      statusNodes.textContent = `${visData.nodeCount} nodes`;
+      statusDepth.textContent = `Depth: ${visData.maxDepth}`;
+      statusLanguage.textContent = `Language: ${visData.language}`;
+      statusParseTime.textContent = `Parse: ${parseTime.toFixed(1)}ms`;
+    }
+
+    // Render tree
+    function renderTree(visData) {
+      const rootNode = visData.nodes.get(visData.rootId);
+      if (!rootNode) return;
+
+      treeRoot.innerHTML = renderNode(rootNode, visData, 0);
+      attachNodeListeners(visData);
+    }
+
+    // Render single node
+    function renderNode(node, visData, depth) {
+      const indent = depth * 20;
+      const hasChildren = node.children.length > 0;
+      const isExpanded = node.expanded;
+      const isSelected = node.id === selectedNodeId;
+      const matchesFilter = node.matchesFilter;
+
+      let html = `
+        <div class="tree-node-header ${isSelected ? 'selected' : ''} ${matchesFilter ? 'matched' : ''}" 
+             data-node-id="${node.id}" 
+             style="padding-left: ${indent}px"
+             tabindex="0"
+             role="treeitem"
+             aria-expanded="${hasChildren ? isExpanded : 'false'}"
+             aria-selected="${isSelected}"
+             aria-level="${node.depth + 1}">`;
+
+      if (hasChildren) {
+        html += `<span class="tree-node-expander ${!isExpanded ? 'collapsed' : ''}" aria-hidden="true">▶</span>`;
+      } else {
+        html += `<span class="tree-node-expander" aria-hidden="true"></span>`;
+      }
+
+      html += `
+        <span class="tree-node-icon" aria-hidden="true">${getNodeIcon(node.category)}</span>
+        <span class="tree-node-label" title="${escapeHtml(node.label)}">${escapeHtml(node.label)}</span>
+        <span class="tree-node-type">${escapeHtml(node.type)}</span>
+      </div>`;
+
+      if (node.source && node.matchesFilter) {
+        html += `<div class="tree-node-source" aria-hidden="true">${escapeHtml(node.source)}</div>`;
+      }
+
+      if (hasChildren) {
+        html += `<div class="tree-node-children ${!isExpanded ? 'collapsed' : ''}" role="group">`;
+        for (const childId of node.children) {
+          const child = visData.nodes.get(childId);
+          if (child) {
+            html += renderNode(child, visData, depth + 1);
+          }
+        }
+        html += `</div>`;
+      }
+
+      return html;
+    }
+
+    // Get icon for node category
+    function getNodeIcon(category) {
+      const icons = {
+        statement: '▣',
+        declaration: '◆',
+        expression: '●',
+        identifier: '◇',
+        literal: '◆',
+        keyword: '◆',
+        pattern: '◆',
+        module: '⬚',
+        type: '◆',
+        jsx: '◆',
+        comment: '◆',
+        other: '◆',
+      };
+      return icons[category] || '◆';
+    }
+
+    // Attach event listeners to nodes
+    function attachNodeListeners(visData) {
+      // Expanders
+      document.querySelectorAll('.tree-node-expander').forEach(el => {
+        el.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const header = e.target.closest('.tree-node-header');
+          if (!header) return;
+          const nodeId = header.dataset.nodeId;
+          toggleNode(nodeId, visData);
+        });
+      });
+
+      // Headers (selection)
+      document.querySelectorAll('.tree-node-header').forEach(el => {
+        el.addEventListener('click', (e) => {
+          if (e.target.classList.contains('tree-node-expander')) return;
+          const nodeId = el.dataset.nodeId;
+          selectNode(nodeId, visData);
+        });
+
+        el.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            const nodeId = el.dataset.nodeId;
+            const node = visData.nodes.get(nodeId);
+            if (node && node.children.length > 0) {
+              toggleNode(nodeId, visData);
+            } else {
+              selectNode(nodeId, visData);
+            }
+          }
+        });
+      });
+    }
+
+    // Toggle node expansion
+    function toggleNode(nodeId, visData) {
+      const node = visData.nodes.get(nodeId);
+      if (!node || node.children.length === 0) return;
+
+      node.expanded = !node.expanded;
+      const childrenContainer = document.querySelector(`[data-node-id="${nodeId}"] + .tree-node-children`);
+      const expander = document.querySelector(`[data-node-id="${nodeId}"] .tree-node-expander`);
+      
+      if (childrenContainer) {
+        childrenContainer.classList.toggle('collapsed', !node.expanded);
+      }
+      if (expander) {
+        expander.classList.toggle('collapsed', !node.expanded);
+      }
+      
+      const header = document.querySelector(`[data-node-id="${nodeId}"]`);
+      if (header) {
+        header.setAttribute('aria-expanded', node.expanded);
+      }
+    }
+
+    // Select node
+    function selectNode(nodeId, visData) {
+      // Remove previous selection
+      document.querySelectorAll('.tree-node-header.selected').forEach(el => {
+        el.classList.remove('selected');
+        el.setAttribute('aria-selected', 'false');
+      });
+
+      // Add new selection
+      const header = document.querySelector(`[data-node-id="${nodeId}"]`);
+      if (header) {
+        header.classList.add('selected');
+        header.setAttribute('aria-selected', 'true');
+        selectedNodeId = nodeId;
+      }
+    }
+
+    // Apply filters
+    function applyFilters() {
+      if (!currentVisData) return;
+
+      const searchTerm = searchInput.value.toLowerCase().trim();
+      const typeFilterValue = typeFilter.value;
+
+      function filterFn(node) {
+        if (searchTerm && !node.label.toLowerCase().includes(searchTerm) && 
+            !node.type.toLowerCase().includes(searchTerm)) {
+          return false;
+        }
+        if (typeFilterValue && node.category !== typeFilterValue) {
+          return false;
+        }
+        return true;
+      }
+
+      currentVisData = applyFilter(currentVisData, filterFn);
+      renderTree(currentVisData);
+    }
+
+    // Escape HTML
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // Modal helpers
+    function openModal(modal) {
+      modal.classList.add('open');
+      document.body.style.overflow = 'hidden';
+      modal.querySelector('button, input, select, textarea')?.focus();
+    }
+
+    function closeModal(modal) {
+      modal.classList.remove('open');
+      document.body.style.overflow = '';
+    }
+
+    // Share modal
+    document.getElementById('btn-share').addEventListener('click', () => {
+      if (!currentVisData) {
+        showToast('No visualization to share', 'warning');
+        return;
+      }
+
+      const permalink = generatePermalink(currentAST, {}, {
+        x: 0, y: 0, zoom: 1, centerNodeId: selectedNodeId
+      });
+      
+      const fullUrl = window.location.origin + window.location.pathname + permalink;
+      document.getElementById('share-url').value = fullUrl;
+      
+      // Generate QR code (using a simple placeholder)
+      const qrDiv = document.getElementById('share-qr');
+      qrDiv.innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(fullUrl)}" alt="QR Code">`;
+      
+      openModal(shareModal);
+    });
+
+    document.getElementById('share-modal-close').addEventListener('click', () => closeModal(shareModal));
+    document.getElementById('share-close').addEventListener('click', () => closeModal(shareModal));
+    document.getElementById('share-copy').addEventListener('click', async () => {
+      const url = document.getElementById('share-url').value;
+      await navigator.clipboard.writeText(url);
+      showToast('Link copied to clipboard!');
+      closeModal(shareModal);
+    });
+
+    shareModal.addEventListener('click', (e) => {
+      if (e.target === shareModal) closeModal(shareModal);
+    });
+
+    // Export modal
+    document.getElementById('btn-export').addEventListener('click', () => {
+      if (!currentVisData) {
+        showToast('No visualization to export', 'warning');
+        return;
+      }
+
+      document.getElementById('export-format').value = 'json';
+      handleExportFormatChange();
+      openModal(exportModal);
+    });
+
+    function handleExportFormatChange() {
+      const format = document.getElementById('export-format').value;
+      let output = '';
+
+      switch (format) {
+        case 'json':
+          output = exportToJSON(currentVisData);
+          break;
+        case 'dot':
+          output = exportToDOT(currentVisData);
+          break;
+        case 'mermaid':
+          output = exportToMermaid(currentVisData);
+          break;
+      }
+
+      document.getElementById('export-output').value = output;
+    }
+
+    document.getElementById('export-format').addEventListener('change', handleExportFormatChange);
+    document.getElementById('export-modal-close').addEventListener('click', () => closeModal(exportModal));
+    document.getElementById('export-close').addEventListener('click', () => closeModal(exportModal));
+    document.getElementById('export-copy').addEventListener('click', async () => {
+      const output = document.getElementById('export-output').value;
+      await navigator.clipboard.writeText(output);
+      showToast('Exported to clipboard!');
+    });
+    document.getElementById('export-download').addEventListener('click', () => {
+      const format = document.getElementById('export-format').value;
+      const output = document.getElementById('export-output').value;
+      const mimeTypes = { json: 'application/json', dot: 'text/plain', mermaid: 'text/plain' };
+      const extensions = { json: 'json', dot: 'dot', mermaid: 'mmd' };
+      
+      const blob = new Blob([output], { type: mimeTypes[format] });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `ast-visualization.${extensions[format]}`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast('File downloaded!');
+    });
+
+    exportModal.addEventListener('click', (e) => {
+      if (e.target === exportModal) closeModal(exportModal);
+    });
+
+    // AI Prompt modal
+    document.getElementById('btn-ai-prompt').addEventListener('click', () => {
+      if (!currentAST) {
+        showToast('No code to generate prompt for', 'warning');
+        return;
+      }
+
+      const prompt = copyAsAIPrompt(currentAST, editor.value, selectedNodeId);
+      document.getElementById('ai-prompt-output').value = prompt;
+      openModal(aiPromptModal);
+    });
+
+    document.getElementById('ai-prompt-modal-close').addEventListener('click', () => closeModal(aiPromptModal));
+    document.getElementById('ai-prompt-close').addEventListener('click', () => closeModal(aiPromptModal));
+    document.getElementById('ai-prompt-copy').addEventListener('click', async () => {
+      const prompt = document.getElementById('ai-prompt-output').value;
+      await navigator.clipboard.writeText(prompt);
+      showToast('AI prompt copied to clipboard!');
+      closeModal(aiPromptModal);
+    });
+
+    aiPromptModal.addEventListener('click', (e) => {
+      if (e.target === aiPromptModal) closeModal(aiPromptModal);
+    });
+
+    // Load example
+    document.getElementById('btn-load-example').addEventListener('click', () => {
+      editor.value = exampleCode;
+      languageSelect.value = 'js';
+      parseAndVisualize();
+      showToast('Example loaded!');
+    });
+
+    // Format code (placeholder)
+    document.getElementById('btn-format').addEventListener('click', () => {
+      showToast('Code formatting coming soon', 'warning');
+    });
+
+    // Clear editor
+    document.getElementById('btn-clear').addEventListener('click', () => {
+      editor.value = '';
+      clearVisualization();
+      showToast('Editor cleared');
+    });
+
+    // Editor events
+    editor.addEventListener('input', debouncedParse);
+
+    // Language change
+    languageSelect.addEventListener('change', parseAndVisualize);
+
+    // Filter events
+    searchInput.addEventListener('input', () => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(applyFilters, 200);
+    });
+
+    typeFilter.addEventListener('change', applyFilters);
+
+    // Mode tabs
+    modeTabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        modeTabs.forEach(t => {
+          t.classList.remove('active');
+          t.setAttribute('aria-selected', 'false');
+        });
+        tab.classList.add('active');
+        tab.setAttribute('aria-selected', 'true');
+
+        const mode = tab.dataset.mode;
+        treeContainer.style.display = mode === 'tree' || mode === 'split' ? 'block' : 'none';
+        graphContainer.style.display = mode === 'graph' || mode === 'split' ? 'flex' : 'none';
+      });
+    });
+
+    // Handle permalink from URL
+    function handlePermalink() {
+      const hash = window.location.hash;
+      if (hash && isValidPermalink(hash)) {
+        const result = parsePermalink(hash);
+        if (result) {
+          // Restore editor content
+          editor.value = result.data.sourceCode;
+          languageSelect.value = result.data.language;
+          
+          // Parse and visualize
+          currentAST = parseAST(result.data.sourceCode, { language: result.data.language });
+          currentAST.sourceCode = result.data.sourceCode;
+          currentAST.language = result.data.language;
+          
+          currentVisData = result.data;
+          
+          // Restore viewport if available
+          if (result.viewport?.centerNodeId) {
+            selectedNodeId = result.viewport.centerNodeId;
+          }
+          
+          renderTree(currentVisData);
+          updateStatus(currentVisData, 0);
+          showToast('Visualization loaded from link!');
+        }
+      } else {
+        // Initial parse
+        parseAndVisualize();
+      }
+    }
+
+    // Check if valid permalink
+    function isValidPermalink(permalink) {
+      try {
+        const encoded = permalink.startsWith('#') ? permalink.slice(1) : permalink;
+        const json = atob(encoded.replace(/-/g, '+').replace(/_/g, '/'));
+        const data = JSON.parse(json);
+        return data.version === '1.0' && data.ast && data.options;
+      } catch {
+        return false;
+      }
+    }
+
+    // Handle URL changes
+    window.addEventListener('hashchange', handlePermalink);
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+      // Escape to close modals
+      if (e.key === 'Escape') {
+        [shareModal, exportModal, aiPromptModal].forEach(m => {
+          if (m.classList.contains('open')) closeModal(m);
+        });
+      }
+
+      // Ctrl/Cmd + Enter to parse
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        parseAndVisualize();
+      }
+
+      // Ctrl/Cmd + S to share
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        document.getElementById('btn-share').click();
+      }
+    });
+
+    // Initialize
+    handlePermalink();
+  </script>
+</body>
+</html>
